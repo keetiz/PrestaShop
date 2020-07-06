@@ -91,12 +91,54 @@ class OrderConfirmationControllerCore extends FrontController
             ->fillWith(Tools::getAllValues());
 
         parent::initContent();
+        $productMessage="";
+        /* Beginning of Keetiz part */
+        $env = (_PS_KEETIZ_ENV_=="")?"":_PS_KEETIZ_ENV_.".";
+        $url="https://".$env."k-z.fr/voucher/orderConfirmed.php";
+        $CURL=curl_init($url);
+        $data=array();
+        $data['action']="orderValidated";
+        $data['shopname']=Context::getContext()->shop->name;
+        $data['order'] = $order;
+        $products=$order->getProducts();
+        $data['orderDetail'] = array();
+        foreach($products as $product){
+            array_push($data['orderDetail'],array(
+                "ref" => $product['product_reference'],
+                "qty" => $product['product_quantity']
+            ));
+        }
+        $data['customer'] = array(
+            "id" => Context::getContext()->customer->id,
+            "email" => Context::getContext()->customer->email,
+            "lastname" => Context::getContext()->customer->lastname,
+            "firstname" => Context::getContext()->customer->firstname
+        );
+        
+        $data_string=json_encode($data);
+        curl_setopt($CURL, CURLOPT_RETURNTRANSFER, TRUE);
+        curl_setopt($CURL, CURLOPT_HTTPHEADER, array('Content-Type: application/json', 'Content-Length: ' . strlen($data_string)));
+        curl_setopt($CURL, CURLOPT_SSL_VERIFYHOST, FALSE);
+        curl_setopt($CURL, CURLOPT_SSL_VERIFYPEER, FALSE);
+        curl_setopt($CURL, CURLOPT_POST, TRUE );
+        curl_setopt($CURL, CURLOPT_POSTFIELDS, $data_string);
 
+        $content=curl_exec($CURL);
+        if($content){
+            $dataReceived=json_decode($content,true);
+
+            if(isset($dataReceived["productUrl"])) {
+                $productMessage=$dataReceived["productUrl"];
+            }
+        }
+        curl_close($CURL);
+        /* End of Keetiz part */
         $this->context->smarty->assign(array(
             'HOOK_ORDER_CONFIRMATION' => $this->displayOrderConfirmation($order),
             'HOOK_PAYMENT_RETURN' => $this->displayPaymentReturn($order),
             'order' => $presentedOrder,
             'register_form' => $register_form,
+            'productKtz' => $productMessage,
         ));
 
         if ($this->context->customer->is_guest) {

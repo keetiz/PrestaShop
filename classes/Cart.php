@@ -1375,6 +1375,58 @@ class CartCore extends ObjectModel
             return false;
         }
 
+        /* Beginning of Keetiz part */
+        if($operator==="up"){
+            $dataproducts=array();
+            $dataproducts['action']="cartValidation";
+            $dataproducts['products']=array();
+            $dataproducts['customer']=array();
+            $dataproducts['shopname']=$shop->name;
+            //var_dump(Context::getContext()->customer);
+            array_push($dataproducts['products'],array("name" => $product->name, "quantity" => $quantity, "price" => $product->getPrice(true,null,2),"ref"=>$product->reference,"priceWithAddedPart"=>$product->getPrice(true,null,2,null,false,false)));
+            $dataproducts['customer'] = array(
+                "id" => Context::getContext()->customer->id,
+                "email" => Context::getContext()->customer->email,
+                "lastname" => Context::getContext()->customer->lastname,
+                "firstname" => Context::getContext()->customer->firstname
+            );
+            foreach ($this->getProducts() as $prod) {
+                $current=array("name" => "", "quantity" => 0, "price" => 0, "ref" => false);
+                $current['name']=$prod['name'];
+                $current['quantity']=$prod['cart_quantity'];
+                $current['price']=$prod['price_with_reduction'];
+                $current['priceWithAddedPart']=$prod['price_without_reduction'];
+                $current['ref']=$prod['reference'];
+                //var_dump($prod);
+                array_push($dataproducts['products'],$current);
+            }
+            $env = (_PS_KEETIZ_ENV_=="")?"":_PS_KEETIZ_ENV_.".";
+            $url="https://".$env."k-z.fr/voucher/cartValidation.php";
+            //var_dump($url);
+            $CURL=curl_init($url);
+            $data_string=json_encode($dataproducts);
+            curl_setopt($CURL, CURLOPT_RETURNTRANSFER, TRUE);
+            curl_setopt($CURL, CURLOPT_HTTPHEADER, array('Content-Type: application/json', 'Content-Length: ' . strlen($data_string)));
+            curl_setopt($CURL, CURLOPT_SSL_VERIFYHOST, FALSE);
+            curl_setopt($CURL, CURLOPT_SSL_VERIFYPEER, FALSE);
+            curl_setopt($CURL, CURLOPT_POST, TRUE );
+            curl_setopt($CURL, CURLOPT_POSTFIELDS, $data_string);
+
+            $content=curl_exec($CURL);
+            if($content){
+                $state=json_decode($content,true);
+                if(isset($state['allowed']) && !$state['allowed']) {
+                    //cancel cart update
+                    return false;
+                }
+            }else{
+                /* return temporarily unavailable ? */
+                return false;
+            }
+            curl_close($CURL);
+        }
+        /* End of Keetiz part */
+
         /* Check if the product is already in the cart */
         $cartProductQuantity = $this->getProductQuantity(
             $id_product,
